@@ -1,0 +1,175 @@
+---
+title: "Data science Capstone Project - Data Exploring"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Summary
+
+This reports is aimed at the exploration of contents of 3 large data files, and their cleaning and preparation for a natural language algorithm to predict next-words. The ‘quanteda’ package is employed, because of the ease of use, what can compromise performance in a real situation. 
+
+Until the date of this report, the following steps were accomplished:
+
+* Understanding the size of the data, the number of lines, and characters per line, using quanteda.
+* Extraction of a sample for each document, to better understand the data and the methods used on them, without harm to the performance.
+* Striping excess whitespace and punctuation, converting words to lower case and filtering for profanity.
+* The documents were not stemmed in order to keep the context for the ngrams
+* Stop words were retained for 2 and 3 grams since they are needed to make sense of the data
+* Words with sparsity bigger than 75% sparsity in the documents are removed
+
+
+##Obtaining and undestanding the files
+The files were obtaining throught this [link](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip)
+
+'LaF' library was used to determine the number of lines and to generate file samples of 50,000 lines chunk, and 'pander' for prettier output, the librarys loading and some variable declarations were left out to make the code more readable.
+```{r, echo=FALSE, include=FALSE}
+library(LaF)
+library(pander)
+library(tools)
+library(quanteda)
+library(RColorBrewer)
+library(ggplot2)
+
+nlines <- c()
+files_size <- c()
+path <- "./data/final/en_US/"
+sample_path <- "./data/final/en_US/samples/"
+```
+```{r, cache=TRUE}
+#Get only txt files
+file_list <- list.files(path, pattern = "^.*[.]txt$")
+for(filename in file_list){
+  filepath <- paste0(path, filename)
+  files_size <- c(files_size, file.size(filepath))
+  line_number <- determine_nlines(filepath)
+  nlines <- c(nlines, line_number)
+  #Generate the sample
+  sample_lines(paste0(sample_path,filename),  as.integer(line_number * 0.1), nlines = line_number)
+}
+files_info <- data.frame(file_list, nlines, files_size)
+names(files_info) <- c("File", "Number of Lines", "File Size")
+pander(files_info)
+```
+
+
+## Words exploration
+
+Since the full files are a little bit to heavy for further analysis we are going to use the sample files
+```{r, warning=FALSE, message=FALSE, cache=TRUE}
+
+sample_corp <- corpus(textfile(file=paste0(sample_path, "*")))
+summary(sample_corp)
+```
+
+Get the bad words so we can take them out
+
+For the words analysis, the stop words and the bad words were taken away, as well as the punctuation and the numbers.
+```{r, warning=FALSE, message=FALSE, cache=TRUE}
+#taken from https://github.com/shutterstock/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words
+badWords <- VectorSource(readLines("./dirty/english.txt"))
+ignoredFeatures <- c(stopwords("english"), badWords$content)
+```
+
+As seen in the word cloud and in the table below, the most used words in the twitter sample were: just, like and get
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE, error=FALSE}
+twitter_corp <- corpus(textfile(file=paste0(sample_path, "en_US.twitter.txt")))
+twitter_dfm <- dfm(twitter_corp, ignoredFeatures=ignoredFeatures, verbose=FALSE)
+pander(topfeatures(twitter_dfm, 10))
+```
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE, error=FALSE}
+plot(twitter_dfm, max.words=100, colors = brewer.pal(6, "Dark2"), scale=c(4, .2))
+```
+
+For the blogs, the most common words were: one, will and just
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE, error=FALSE}
+blogs_corp <- corpus(textfile(file=paste0(sample_path, "en_US.blogs.txt")))
+blogs_dfm <- dfm(blogs_corp, ignoredFeatures=ignoredFeatures, verbose=FALSE)
+pander(topfeatures(blogs_dfm, 10))
+```
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE}
+plot(blogs_dfm, max.words=100, colors = brewer.pal(6, "Dark2"), scale=c(4, .2))
+```
+
+And finally for the news, the most common words were said, will and one
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE}
+news_corp <- corpus(textfile(file=paste0(sample_path, "en_US.news.txt")))
+news_dfm <- dfm(news_corp, ignoredFeatures=ignoredFeatures, verbose=FALSE)
+pander(topfeatures(news_dfm, 10))
+```
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE}
+plot(news_dfm, max.words=100, colors = brewer.pal(6, "Dark2"), scale=c(4, .2))
+```
+
+So, even thought there were some differences between the message channel, there were also many similarities, it is possible to notice that the words "one, will and just"" repeated on the top 3 words for at least two of the mediums and also happens when we look at the consolidated features.
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE, error=FALSE}
+sample_dfm <- dfm(sample_corp, ignoredFeatures=ignoredFeatures, verbose=FALSE)
+pander(topfeatures(sample_dfm, 10))
+```
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE}
+plot(sample_dfm, max.words=100, colors = brewer.pal(6, "Dark2"), scale=c(4, .2))
+```
+
+It is also possible to notice that a few word respond for most of the terms
+```{r}
+termfreq <- sort(colSums(sample_dfm), decreasing = TRUE)
+totalfreq <- sum(termfreq)
+totalcount <- length(termfreq)
+termfreq_df <- data.frame(word=names(termfreq),freq=termfreq,cumfreq=cumsum(termfreq), perccumfreq=cumsum(termfreq)/totalfreq, rank=seq_along(termfreq), perccont=seq_along(termfreq)/totalcount)
+ggplot(termfreq_df, aes(perccont, perccumfreq)) + geom_point() + xlab("Cumulative word count") + ylab("Cumulative word frequency")
+```
+
+
+## Ngrams exploration
+
+For the ngrams i've kepts the stopwords, since they are important for the context and as expected its is possible to see that most of the top bigrams and trigrams contains them.
+
+**Bigram**
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE, error=FALSE}
+bigram_dfm <- dfm(sample_corp, ignoredFeatures=badWords$content, ngrams=2, verbose=FALSE)
+pander(topfeatures(bigram_dfm, 10))
+```
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE}
+plot(bigram_dfm, max.words=100, colors = brewer.pal(6, "Dark2"), scale=c(4, .2))
+```
+
+**Trigram**
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE, error=FALSE}
+trigram_dfm <- dfm(sample_corp, ignoredFeatures=badWords$content, ngrams=3, verbose=FALSE)
+pander(topfeatures(trigram_dfm, 10))
+```
+```{r, warning=FALSE, message=FALSE, cache=TRUE, comment=FALSE}
+plot(trigram_dfm, max.words=100, colors = brewer.pal(6, "Dark2"), scale=c(4, .2))
+```
+
+It is also possible to notice that as the "n" increases, the frequency of terms reduces, but there is still a big concentration of most used terms as shown in the graphs below:
+
+**Bigram**
+```{r, cache=TRUE,}
+bigramfreq <- sort(colSums(bigram_dfm), decreasing = TRUE)
+totalbigramfreq <- sum(bigramfreq)
+totalbigramcount <- length(bigramfreq)
+bigramfreq_df <- data.frame(word=names(bigramfreq),freq=bigramfreq, perccumfreq=cumsum(bigramfreq)/totalbigramfreq, perccont=seq_along(bigramfreq)/totalbigramcount)
+ggplot(bigramfreq_df, aes(perccont, perccumfreq)) + geom_point() + xlab("Cumulative terms count") + ylab("Cumulative terms frequency")
+```
+
+**Trigram**
+```{r, cache=TRUE,}
+trigramfreq <- sort(colSums(trigram_dfm), decreasing = TRUE)
+totaltrigramfreq <- sum(trigramfreq)
+totaltrugramcount <- length(trigramfreq)
+trigramfreq_df <- data.frame(word=names(trigramfreq),freq=trigramfreq, perccumfreq=cumsum(trigramfreq)/totaltrigramfreq, perccont=seq_along(trigramfreq)/totaltrugramcount)
+ggplot(trigramfreq_df, aes(perccont, perccumfreq)) + geom_point() + xlab("Cumulative terms count") + ylab("Cumulative terms frequency")
+```
+
+
+## Next steps and model consideration
+
+As noticed during the exploration, there is a great concentration of frequency in "few" terms, so we can reduce the features and complexity of the model removing terms with only 1 ocurrence.
+
+I stil have to find a way to improve performance, since processing the whole files in 'quanteda' package stressed a lot my computer, 'tm' did a little better and may be my way to go.
+
+For the model I will select the words based on the probability of ocurring in the unigrams, bigrams and trigrams but I still have to figure out the best way of weighting them. 

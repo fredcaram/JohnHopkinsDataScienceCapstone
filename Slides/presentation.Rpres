@@ -1,0 +1,43 @@
+Previsão de palavras
+========================================================
+author: Frederico Caram Luiz
+date: 
+autosize: true
+
+Estatisticas amostrais
+========================================================
+
+Quartis
+```{r, echo=FALSE, cache=TRUE}
+load(file = "../.RData")
+termfreq <- sort(unigram_freq, decreasing = TRUE)
+summary(termfreq)
+```
+
+Desvio padrão e variância
+```{r, echo=FALSE, results=FALSE}
+term_sd = sd(termfreq)
+term_var = var(termfreq)
+```
+Desvio Padrão `r round(term_sd,2)`
+
+Variância `r round(term_sd,2)`
+
+Distribuição das Palavras
+========================================================
+Uma imensa parte das palavras ocorre apenas uma vez.
+```{r, echo=FALSE, cache=TRUE} 
+library("ggplot2")
+totalfreq <- sum(termfreq)
+totalcount <- length(termfreq)
+termfreq_df <- data.frame(word=names(termfreq),freq=termfreq,cumfreq=cumsum(termfreq), perccumfreq=cumsum(termfreq)/totalfreq, rank=seq_along(termfreq), perccont=seq_along(termfreq)/totalcount)
+hist(termfreq, title="Ocorrência das palavras")
+#ggplot(termfreq_df, aes(perccont, perccumfreq)) + geom_point() + xlab("Cumulative word count") + ylab("Cumulative word frequency")
+```
+
+Principais palavras
+========================================================
+
+```{r, echo=FALSE}
+plot(cars)
+```
